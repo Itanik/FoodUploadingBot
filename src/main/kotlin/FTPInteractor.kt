@@ -9,15 +9,20 @@ import ftp.data.Credentials
 import ftp.data.Food
 import ftp.data.Menu
 import kotlinx.coroutines.Dispatchers.Default
-import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.apache.commons.net.ftp.FTPReply
 import java.io.File
+
+sealed class ProcessingResult {
+    data class Success(val data: String) : ProcessingResult()
+    object InProgress : ProcessingResult()
+    object ErrorWrongDocumentType : ProcessingResult()
+    data class Error(val message: String) : ProcessingResult()
+}
 
 class FTPInteractor {
     private val scope = MainScope()
@@ -31,31 +36,64 @@ class FTPInteractor {
         return Json.decodeFromString(credJson)
     }
 
-    fun downloadFile(bot: Bot, document: Document, onLoad: (File?) -> Unit) = scope.launch(Default) {
-        val bytes = bot.downloadFileBytes(document.fileId)
-        if (bytes == null) {
-            withContext(Main) { onLoad(null) }
-            return@launch
+    fun processFile(bot: Bot, document: Document, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
+        val extension = document.fileName?.split('.')?.last() ?: ""
+        when (extension) {
+            "jpg", "jpeg", "png", "pdf" -> {
+                onResult(ProcessingResult.InProgress)
+                val file = downloadFile(bot, document)
+                if (file == null) {
+                    onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
+                    return@launch
+                }
+                uploadMenu(file)
+                onResult(ProcessingResult.Success("Меню успешно загружено"))
+            }
+            "xlsx" -> {
+                onResult(ProcessingResult.InProgress)
+                val file = downloadFile(bot, document)
+                if (file == null) {
+                    onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
+                    return@launch
+                }
+                uploadTable(file)
+                // TODO: Сделать обработку ошибок здесь, иначе в любых случаях будет сообщено об успешной попытке
+                onResult(ProcessingResult.Success("Таблица успешно загружена"))
+            }
+            else -> {
+                onResult(ProcessingResult.ErrorWrongDocumentType)
+            }
         }
-
-        val file = FileManager.createFile(document.fileName!!).apply { writeBytes(bytes) }
-        withContext(Main) { onLoad(file) }
     }
 
-    fun upload(menuFile: File?, tableFile: File?) {
+    private fun downloadFile(bot: Bot, document: Document): File? {
+        val bytes = bot.downloadFileBytes(document.fileId) ?: return null
+        return FileManager.createFile(document.fileName!!).apply { writeBytes(bytes) }
+    }
 
+    private fun uploadMenu(menuFile: File) {
         try {
             val connectionResult = ftp.connect()
             if (!FTPReply.isPositiveCompletion(connectionResult)) throw Exception("Server refuse connection")
+            val path = uploadMenuFile(menuFile)
+            uploadMenuJson(path)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            ftp.disconnect()
+        }
 
-            if (menuFile != null) {
-                val path = uploadMenuFile(menuFile)
-                uploadMenuJson(path)
-            }
-            if (tableFile != null) {
-                uploadTable(tableFile)
-                uploadUpdatedFoodFilesJson()
-            }
+    }
+
+    private fun uploadTable(tableFile: File) {
+        try {
+            val connectionResult = ftp.connect()
+            if (!FTPReply.isPositiveCompletion(connectionResult)) throw Exception("Server refuse connection")
+            if (ftp.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream()))
+                println("Successfully uploaded ${tableFile.name}!")
+            else
+                throw Exception("Failure! ${tableFile.name} does not uploaded")
+            uploadUpdatedFoodFilesJson()
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
@@ -77,13 +115,6 @@ class FTPInteractor {
             println("Successfully uploaded $foodJsonFileName!")
         } else
             throw Exception("Failure! $foodJsonFileName does not uploaded")
-    }
-
-    private fun uploadTable(tableFile: File) {
-        if (ftp.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream()))
-            println("Successfully uploaded ${tableFile.name}!")
-        else
-            throw Exception("Failure! ${tableFile.name} does not uploaded")
     }
 
     private fun uploadMenuJson(path: String) {

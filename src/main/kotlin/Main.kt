@@ -17,13 +17,6 @@ fun main(appArgs: Array<String>) {
 
     val interactor = FTPInteractor()
 
-    var menuProcessing = false
-    var tableProcessing = false
-    var lastProcessedImage = "none"
-    var lastProcessedMenuDocument = "none"
-    var lastProcessedTableDocument = "none"
-
-
     val bot = bot {
         token = botToken
         timeout = 30
@@ -73,33 +66,18 @@ fun main(appArgs: Array<String>) {
                 if (!hasAccess(message.chat.username)) return@document
                 val document = message.document ?: return@document
 
-                println("Attached document: $document")
-                val extension = document.fileName?.split('.')?.last() ?: return@document
-                when (extension) {
-                    "jpg", "jpeg", "png" -> interactor.downloadFile(bot, document) {
-
+                interactor.processFile(bot, document) { result ->
+                    when (result) {
+                        is ProcessingResult.InProgress ->
+                            bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
+                        is ProcessingResult.Success ->
+                            bot.sendMessage(ChatId.fromId(message.chat.id), result.data)
+                        is ProcessingResult.ErrorWrongDocumentType ->
+                            bot.sendMessage(ChatId.fromId(message.chat.id), "Неверный формат файла.")
+                        is ProcessingResult.Error ->
+                            bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
                     }
                 }
-                /*if (photo.fileId == lastProcessedImage) {
-                    bot.sendMessage(
-                        chatId = ChatId.fromId(message.chat.id),
-                        text = Strings.photoAlreadyProcessed
-                    )
-                    return@photos
-                }
-                message.chat.type*/
-
-                /*interactor.downloadFile(bot, photo.fileId) { file ->
-                    if (file == null) {
-                        println("Cannot load file")
-                        return@downloadFile
-                    }
-                    bot.sendMessage(
-                        chatId = ChatId.fromId(message.chat.id),
-                        text = "Успешно скачал файл ${file.name}"
-                    )
-                }
-                lastProcessedImage = photo.fileId*/
             }
 
             telegramError {
