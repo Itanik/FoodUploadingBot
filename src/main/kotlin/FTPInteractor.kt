@@ -72,44 +72,39 @@ class FTPInteractor {
         }
         val format = Json { prettyPrint = true }
         val json = format.encodeToString(foodData)
-        json.byteInputStream().use { inStream ->
-            if (ftp.uploadFile(foodPath.plus(foodJsonFileName), inStream)) {
-                println("Successfully uploaded $foodJsonFileName!")
-            } else
-                throw Exception("Failure! $foodJsonFileName does not uploaded")
-        }
+
+        if (ftp.uploadFile(foodPath.plus(foodJsonFileName), json.byteInputStream())) {
+            println("Successfully uploaded $foodJsonFileName!")
+        } else
+            throw Exception("Failure! $foodJsonFileName does not uploaded")
     }
 
     private fun uploadTable(tableFile: File) {
-        tableFile.inputStream().use { inStream ->
-            if (ftp.uploadFile(foodPath.plus(tableFile.name), inStream))
-                println("Successfully uploaded ${tableFile.name}!")
-            else
-                throw Exception("Failure! ${tableFile.name} does not uploaded")
-        }
+        if (ftp.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream()))
+            println("Successfully uploaded ${tableFile.name}!")
+        else
+            throw Exception("Failure! ${tableFile.name} does not uploaded")
     }
 
     private fun uploadMenuJson(path: String) {
         val format = Json { prettyPrint = true }
         val json = format.encodeToString(Menu(path.plus("?").plus(System.currentTimeMillis())))
-        json.byteInputStream().use { inStream ->
-            if (ftp.uploadFile(foodPath.plus(menuJsonFileName), inStream)) {
-                println("Successfully uploaded $menuJsonFileName!")
-            } else
-                throw Exception("Failure! $menuJsonFileName does not uploaded")
-        }
+
+        if (ftp.uploadFile(foodPath.plus(menuJsonFileName), json.byteInputStream())) {
+            println("Successfully uploaded $menuJsonFileName!")
+        } else
+            throw Exception("Failure! $menuJsonFileName does not uploaded")
     }
 
     private fun uploadMenuFile(menuFile: File): String {
         val fileName = menuFile.name
         val newName = foodImageFileName.plus(fileName.extension)
         val newPath = foodPath.plus(newName)
-        menuFile.inputStream().use { inStream ->
-            if (ftp.uploadFile(newPath, inStream))
-                println("Successfully uploaded $newName!")
-            else
-                println("Failure! $newName does not uploaded")
-        }
+
+        if (ftp.uploadFile(newPath, menuFile.inputStream()))
+            println("Successfully uploaded $newName!")
+        else
+            println("Failure! $newName does not uploaded")
         return newPath
     }
 

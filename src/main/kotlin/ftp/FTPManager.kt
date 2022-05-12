@@ -35,7 +35,7 @@ class FTPManager(private val credentials: Credentials) {
     fun uploadFile(path: String, file: InputStream): Boolean {
         println("Starting to upload file on: $path")
         client.setFileType(FTP.BINARY_FILE_TYPE)
-        return client.storeFile(path, file)
+        return file.use { client.storeFile(path, it) }
     }
 
     companion object {
