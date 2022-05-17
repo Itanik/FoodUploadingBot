@@ -1,4 +1,4 @@
-package ftp.data
+package data
 
 import kotlinx.serialization.Serializable
 

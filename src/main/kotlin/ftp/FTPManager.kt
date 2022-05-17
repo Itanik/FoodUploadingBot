@@ -1,7 +1,7 @@
 package ftp
 
+import data.Credentials
 import foodPath
-import ftp.data.Credentials
 import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPClientConfig

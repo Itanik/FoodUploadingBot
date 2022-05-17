@@ -1,6 +1,6 @@
-import ftp.data.Credentials
-import ftp.data.Food
-import ftp.data.Menu
+import data.Credentials
+import data.Food
+import data.Menu
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient

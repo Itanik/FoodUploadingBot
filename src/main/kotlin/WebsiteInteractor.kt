@@ -1,9 +1,9 @@
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.files.Document
+import data.Credentials
+import data.Food
+import data.Menu
 import ftp.FTPManager
-import ftp.data.Credentials
-import ftp.data.Food
-import ftp.data.Menu
 import kotlinx.coroutines.Dispatchers.Default
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
