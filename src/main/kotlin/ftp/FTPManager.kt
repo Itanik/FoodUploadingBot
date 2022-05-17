@@ -1,5 +1,6 @@
 package ftp
 
+import foodPath
 import ftp.data.Credentials
 import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
@@ -36,12 +37,5 @@ class FTPManager(private val credentials: Credentials) {
         println("Starting to upload file on: $path")
         client.setFileType(FTP.BINARY_FILE_TYPE)
         return file.use { client.storeFile(path, it) }
-    }
-
-    companion object {
-        const val foodPath = "/food/"
-        const val foodJsonFileName = "food_files.json"
-        const val menuJsonFileName = "menu_file.json"
-        const val foodImageFileName = "menu."
     }
 }
