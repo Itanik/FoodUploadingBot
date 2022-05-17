@@ -1,10 +1,6 @@
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.files.Document
 import ftp.FTPManager
-import ftp.FTPManager.Companion.foodImageFileName
-import ftp.FTPManager.Companion.foodJsonFileName
-import ftp.FTPManager.Companion.foodPath
-import ftp.FTPManager.Companion.menuJsonFileName
 import ftp.data.Credentials
 import ftp.data.Food
 import ftp.data.Menu
@@ -14,8 +10,14 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.apache.commons.net.ftp.FTPReply
 import java.io.File
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 sealed class ProcessingResult {
     data class Success(val data: String) : ProcessingResult()
@@ -28,6 +30,10 @@ class FTPInteractor {
     private val scope = MainScope()
     private val credentials = getCredentials()
     private val ftp by lazy { FTPManager(credentials) }
+    private val httpClient by lazy { OkHttpClient.Builder().build() }
+    private val timeFormatter: DateTimeFormatter by lazy {
+        DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
+    }
 
     private fun getCredentials(): Credentials {
         val credJson = FileManager.credentialsFile.bufferedReader().use {
@@ -66,6 +72,49 @@ class FTPInteractor {
         }
     }
 
+    fun getLastMenuModificationTime(onResult: (Menu?) -> Unit) = scope.launch(Default) {
+        try {
+            val path = "https://${credentials.host}$foodPath$menuJsonFileName"
+            val request = Request.Builder()
+                .url(path)
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                response.body()?.string()?.let { menuJson ->
+                    onResult(Json.decodeFromString<Menu>(menuJson))
+                    return@launch
+                }
+                onResult(null)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onResult(null)
+        }
+    }
+
+    fun getLastTableModificationTime(onResult: (Food?) -> Unit) = scope.launch(Default) {
+        try {
+            val path = "https://${credentials.host}$foodPath$foodJsonFileName"
+            val request = Request.Builder()
+                .url(path)
+                .build()
+
+            println("Делаю запрос по адресу $path")
+            httpClient.newCall(request).execute().use { response ->
+                response.body()?.string()?.let { foodJson ->
+                    val foodList = Json.decodeFromString<List<Food>>(foodJson).sortedBy { it.name }
+                    onResult(foodList.last())
+                    return@launch
+                }
+                println("Не удалось распарсить ответ")
+                onResult(null)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onResult(null)
+        }
+    }
+
     private fun downloadFile(bot: Bot, document: Document): File? {
         val bytes = bot.downloadFileBytes(document.fileId) ?: return null
         return FileManager.createFile(document.fileName!!).apply { writeBytes(bytes) }
@@ -76,7 +125,7 @@ class FTPInteractor {
             val connectionResult = ftp.connect()
             if (!FTPReply.isPositiveCompletion(connectionResult)) throw Exception("Server refuse connection")
             val path = uploadMenuFile(menuFile)
-            uploadMenuJson(path)
+            uploadMenuJson(path, menuFile.name)
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
@@ -106,7 +155,6 @@ class FTPInteractor {
         val foodFiles = ftp.getTableFilesList()
         println("Total number of food files: ${foodFiles.size}")
         val foodData = foodFiles.map {
-            Food(it, foodPath.plus(it))
         }
         val format = Json { prettyPrint = true }
         val json = format.encodeToString(foodData)
@@ -117,9 +165,14 @@ class FTPInteractor {
             throw Exception("Failure! $foodJsonFileName does not uploaded")
     }
 
-    private fun uploadMenuJson(path: String) {
+    private fun uploadMenuJson(path: String, name: String) {
         val format = Json { prettyPrint = true }
-        val json = format.encodeToString(Menu(path.plus("?").plus(System.currentTimeMillis())))
+        val menu = Menu(
+            path.plus("?").plus(System.currentTimeMillis()),
+            name,
+            getCurrentMoscowTime()
+        )
+        val json = format.encodeToString(menu)
 
         if (ftp.uploadFile(foodPath.plus(menuJsonFileName), json.byteInputStream())) {
             println("Successfully uploaded $menuJsonFileName!")
@@ -138,6 +191,12 @@ class FTPInteractor {
             println("Failure! $newName does not uploaded")
         return newPath
     }
+
+    private fun getCurrentMoscowTime() =
+        LocalDateTime.ofInstant(ZonedDateTime.now().toInstant(), ZoneId.of("Europe/Moscow")).format(timeFormatter)
+
+    private fun parseTimeString(time: String) =
+        LocalDateTime.from(timeFormatter.parse(time)).format(timeFormatter)
 
     private val String.extension: String get() = this.split('.').last()
 }

@@ -12,8 +12,10 @@ private lateinit var allowedUsers: List<String>
 fun main(appArgs: Array<String>) {
     val botToken = appArgs.firstOrNull() ?: throw Exception("You should provide telegram token in app args")
     allowedUsers = appArgs.filterNot { it == botToken }
-    if (allowedUsers.isEmpty()) throw Exception("You should provide nicknames of users, what will be able to use this bot")
-    if (!FileManager.credentialsFile.exists()) throw Exception("You should place credentials.json file in resources folder")
+    if (allowedUsers.isEmpty())
+        throw Exception("You should provide nicknames of users, what will be able to use this bot")
+    if (!FileManager.credentialsFile.exists())
+        throw Exception("You should place credentials.json file in app root folder (from where you run it)")
 
     val interactor = FTPInteractor()
 
@@ -77,6 +79,36 @@ fun main(appArgs: Array<String>) {
                         is ProcessingResult.Error ->
                             bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
                     }
+                }
+            }
+
+            command("status") {
+                if (!hasAccess(message.chat.username)) return@command
+                interactor.getLastMenuModificationTime { menu ->
+                    if (menu == null) {
+                        bot.sendMessage(
+                            ChatId.fromId(message.chat.id),
+                            "Не удалось получить информацию о последнем файле меню"
+                        )
+                        return@getLastMenuModificationTime
+                    }
+                    bot.sendMessage(
+                        ChatId.fromId(message.chat.id),
+                        "Последний файл меню:\n\nИмя - ${menu.name}\n\nДата загрузки - ${menu.lastModificationDate}"
+                    )
+                }
+                interactor.getLastTableModificationTime { table ->
+                    if (table == null) {
+                        bot.sendMessage(
+                            ChatId.fromId(message.chat.id),
+                            "Не удалось получить информацию по последней таблице"
+                        )
+                        return@getLastTableModificationTime
+                    }
+                    bot.sendMessage(
+                        ChatId.fromId(message.chat.id),
+                        "Последняя таблица:\n\nИмя - ${table.name}\n\nДата загрузки - ${table.lastModificationDate}"
+                    )
                 }
             }
 
