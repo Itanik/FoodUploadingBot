@@ -112,6 +112,7 @@ class WebsiteInteractor {
 
     private suspend fun uploadMenu(menuFile: File): ProcessingResult {
         return try {
+            // TODO: переместить проверку до скачивания файла, чтобы не засорять temp
             if (isMenuAlreadyUploaded(menuFile.name))
                 return ProcessingResult.AlreadyUploaded(menuAlreadyProcessed)
 
