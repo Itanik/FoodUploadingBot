@@ -17,7 +17,7 @@ fun main(appArgs: Array<String>) {
     if (!FileManager.credentialsFile.exists())
         throw Exception("You should place credentials.json file in app root folder (from where you run it)")
 
-    val interactor = FTPInteractor()
+    val interactor = WebsiteInteractor()
 
     val bot = bot {
         token = botToken

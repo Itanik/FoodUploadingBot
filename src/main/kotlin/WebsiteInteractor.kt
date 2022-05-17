@@ -24,8 +24,10 @@ sealed class ProcessingResult {
     data class Error(val message: String) : ProcessingResult()
 }
 
-// TODO: Rename class
-class FTPInteractor {
+/**
+ *  Выполняет функции общения с сайтом, адрес которого указан в credentials.json
+ */
+class WebsiteInteractor {
     private val scope = MainScope()
     private val credentials = getCredentials()
     private val ftp by lazy { FTPManager(credentials) }

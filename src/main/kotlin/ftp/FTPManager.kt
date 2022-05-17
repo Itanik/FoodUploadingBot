@@ -7,6 +7,9 @@ import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPClientConfig
 import java.io.InputStream
 
+/**
+ * Получает информацию о загруженных на сайт файлах и загружает туда новые файлы.
+ */
 class FTPManager(private val credentials: Credentials) {
     private val client: FTPClient by lazy {
         FTPClient().apply {
@@ -14,6 +17,9 @@ class FTPManager(private val credentials: Credentials) {
         }
     }
 
+    /**
+     * Необходимо вызывать перед выполнением любой операции с файлами.
+     */
     fun connect(): Int {
         client.apply {
             connect(credentials.host)
@@ -25,6 +31,9 @@ class FTPManager(private val credentials: Credentials) {
         }
     }
 
+    /**
+     *  Необходимо вызывать после выполнением любой операции с файлами.
+     */
     fun disconnect() {
         client.disconnect()
         println("Disconnected from server")
