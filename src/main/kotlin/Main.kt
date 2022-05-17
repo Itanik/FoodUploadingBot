@@ -72,8 +72,43 @@ fun main(appArgs: Array<String>) {
                     when (result) {
                         is ProcessingResult.InProgress ->
                             bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
-                        is ProcessingResult.Success ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), result.data)
+                        is ProcessingResult.Success -> when (result.fileType) {
+                            FileType.MENU -> {
+                                val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
+                                    listOf(
+                                        InlineKeyboardButton.Url(
+                                            text = Strings.checkMenuBtnText,
+                                            url = interactor.credentials.menuPage
+                                        )
+                                    ),
+                                )
+
+                                bot.sendMessage(
+                                    chatId = ChatId.fromId(update.message!!.chat.id),
+                                    text = result.data,
+                                    parseMode = MARKDOWN,
+                                    replyMarkup = inlineKeyboardMarkup
+                                )
+                            }
+                            FileType.TABLE -> {
+                                val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
+                                    listOf(
+                                        InlineKeyboardButton.Url(
+                                            text = Strings.checkTableBtnText,
+                                            url = interactor.credentials.tablePage
+                                        )
+                                    ),
+                                )
+
+                                bot.sendMessage(
+                                    chatId = ChatId.fromId(update.message!!.chat.id),
+                                    text = result.data,
+                                    parseMode = MARKDOWN,
+                                    replyMarkup = inlineKeyboardMarkup
+                                )
+                            }
+                        }
+
                         is ProcessingResult.ErrorWrongDocumentType ->
                             bot.sendMessage(ChatId.fromId(message.chat.id), "Неверный формат файла.")
                         is ProcessingResult.Error ->

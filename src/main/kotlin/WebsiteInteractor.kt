@@ -20,8 +20,12 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
+enum class FileType {
+    MENU, TABLE
+}
+
 sealed class ProcessingResult {
-    data class Success(val data: String) : ProcessingResult()
+    data class Success(val data: String, val fileType: FileType) : ProcessingResult()
     object InProgress : ProcessingResult()
     object ErrorWrongDocumentType : ProcessingResult()
     data class Error(val message: String) : ProcessingResult()
@@ -33,14 +37,14 @@ sealed class ProcessingResult {
  */
 class WebsiteInteractor {
     private val scope = MainScope()
-    private val credentials = getCredentials()
+    val credentials = readCredentialsFile()
     private val ftpManager by lazy { FTPManager(credentials) }
     private val timeFormatter: DateTimeFormatter by lazy {
         DateTimeFormatter.ofPattern(dateTimeFormat)
     }
     private val websiteHttpClient by lazy { WebsiteHttpClient(credentials) }
 
-    private fun getCredentials(): Credentials {
+    private fun readCredentialsFile(): Credentials {
         val credJson = FileManager.credentialsFile.bufferedReader().use {
             it.readText()
         }
@@ -116,7 +120,7 @@ class WebsiteInteractor {
             val path = uploadMenuFile(menuFile)
             uploadMenuJson(path, menuFile.name)
 
-            ProcessingResult.Success(menuUploadedSuccessfully)
+            ProcessingResult.Success(menuUploadedSuccessfully, FileType.MENU)
         } catch (e: Exception) {
             e.printStackTrace()
             ProcessingResult.Error("Ошибка: ${e.message}")
@@ -171,7 +175,7 @@ class WebsiteInteractor {
             if (isFileUploaded) {
                 println("Successfully uploaded ${tableFile.name}!")
                 uploadUpdatedFoodFilesJson()
-                ProcessingResult.Success(tableUploadedSuccessfully)
+                ProcessingResult.Success(tableUploadedSuccessfully, FileType.TABLE)
             } else
                 ProcessingResult.Error("Не удалось загрузить файл таблицы")
 
@@ -198,9 +202,6 @@ class WebsiteInteractor {
 
     private fun getCurrentMoscowTime() =
         LocalDateTime.ofInstant(ZonedDateTime.now().toInstant(), ZoneId.of("Europe/Moscow")).format(timeFormatter)
-
-    private fun parseTimeString(time: String) =
-        LocalDateTime.from(timeFormatter.parse(time)).format(timeFormatter)
-
+    
     private val String.extension: String get() = this.split('.').last()
 }
