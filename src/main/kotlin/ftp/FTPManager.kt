@@ -45,11 +45,17 @@ class FTPManager(private val credentials: Credentials) {
         println("Disconnected from server")
     }
 
+    /**
+     * Возвращает все хранимые по пути host/food файлы таблиц
+     */
     fun getTableFilesList(): List<Food> =
         client.listFiles(foodPath)
             .filter { it.name.endsWith("-sm.xlsx") }
             .map { Food(it.name, foodPath.plus(it), it.timestamp.toLocalDateTime().defaultFormat()) }
 
+    /**
+     * Загружает файл по пути host/path
+     */
     fun uploadFile(path: String, file: InputStream): Boolean {
         println("Starting to upload file on: $path")
         client.setFileType(FTP.BINARY_FILE_TYPE)
