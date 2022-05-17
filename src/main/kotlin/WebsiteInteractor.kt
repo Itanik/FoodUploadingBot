@@ -119,6 +119,7 @@ class WebsiteInteractor {
 
             val path = uploadMenuFile(menuFile)
             uploadMenuJson(path, menuFile.name)
+            deleteFile(menuFile)
 
             ProcessingResult.Success(menuUploadedSuccessfully, FileType.MENU)
         } catch (e: Exception) {
@@ -175,6 +176,7 @@ class WebsiteInteractor {
             if (isFileUploaded) {
                 println("Successfully uploaded ${tableFile.name}!")
                 uploadUpdatedFoodFilesJson()
+                deleteFile(tableFile)
                 ProcessingResult.Success(tableUploadedSuccessfully, FileType.TABLE)
             } else
                 ProcessingResult.Error("Не удалось загрузить файл таблицы")
@@ -185,6 +187,10 @@ class WebsiteInteractor {
         } finally {
             ftpManager.disconnect()
         }
+    }
+
+    private fun deleteFile(file: File) {
+        FileManager.deleteFile(file)
     }
 
     private fun uploadUpdatedFoodFilesJson() {
@@ -202,6 +208,6 @@ class WebsiteInteractor {
 
     private fun getCurrentMoscowTime() =
         LocalDateTime.ofInstant(ZonedDateTime.now().toInstant(), ZoneId.of("Europe/Moscow")).format(timeFormatter)
-    
+
     private val String.extension: String get() = this.split('.').last()
 }

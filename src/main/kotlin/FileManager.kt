@@ -9,7 +9,5 @@ object FileManager {
 
     fun createFile(filename: String) = File(tempDir, filename).apply { createNewFile() }
 
-    fun getResourceFile(path: String): File {
-        return File(ClassLoader.getSystemResource(path).file)
-    }
+    fun deleteFile(file: File): Boolean = file.delete()
 }
