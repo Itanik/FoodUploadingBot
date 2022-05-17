@@ -11,5 +11,9 @@ object Strings {
     const val tableClicked = "Теперь отправь мне файл с таблицей. Это может быть изображение или pdf файл"
     const val hintProcessing = "Подожди, файл еще не загрузился"
 
-    const val photoAlreadyProcessed = "Фото уже обработано"
+    const val menuAlreadyProcessed = "Это меню уже загружено"
+    const val tableAlreadyProcessed = "Данная таблица уже загружена"
+
+    const val tableUploadedSuccessfully = "Таблица успешно загружена"
+    const val menuUploadedSuccessfully = "Меню успешно загружено"
 }

@@ -78,6 +78,8 @@ fun main(appArgs: Array<String>) {
                             bot.sendMessage(ChatId.fromId(message.chat.id), "Неверный формат файла.")
                         is ProcessingResult.Error ->
                             bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                        is ProcessingResult.AlreadyUploaded ->
+                            bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
                     }
                 }
             }
