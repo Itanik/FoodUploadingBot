@@ -10,8 +10,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.apache.commons.net.ftp.FTPReply
 import java.io.File
 import java.time.LocalDateTime
@@ -26,14 +24,15 @@ sealed class ProcessingResult {
     data class Error(val message: String) : ProcessingResult()
 }
 
+// TODO: Rename class
 class FTPInteractor {
     private val scope = MainScope()
     private val credentials = getCredentials()
     private val ftp by lazy { FTPManager(credentials) }
-    private val httpClient by lazy { OkHttpClient.Builder().build() }
     private val timeFormatter: DateTimeFormatter by lazy {
         DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
     }
+    private val websiteHttpClient by lazy { WebsiteHttpClient(credentials) }
 
     private fun getCredentials(): Credentials {
         val credJson = FileManager.credentialsFile.bufferedReader().use {
@@ -72,43 +71,19 @@ class FTPInteractor {
         }
     }
 
-    fun getLastMenuModificationTime(onResult: (Menu?) -> Unit) = scope.launch(Default) {
+    fun getLastAddedMenu(onResult: (Menu?) -> Unit) = scope.launch(Default) {
         try {
-            val path = "https://${credentials.host}$foodPath$menuJsonFileName"
-            val request = Request.Builder()
-                .url(path)
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                response.body()?.string()?.let { menuJson ->
-                    onResult(Json.decodeFromString<Menu>(menuJson))
-                    return@launch
-                }
-                onResult(null)
-            }
+            onResult(websiteHttpClient.getMenu())
         } catch (e: Exception) {
             e.printStackTrace()
             onResult(null)
         }
     }
 
-    fun getLastTableModificationTime(onResult: (Food?) -> Unit) = scope.launch(Default) {
+    fun getLastAddedFoodTable(onResult: (Food?) -> Unit) = scope.launch(Default) {
         try {
-            val path = "https://${credentials.host}$foodPath$foodJsonFileName"
-            val request = Request.Builder()
-                .url(path)
-                .build()
-
-            println("Делаю запрос по адресу $path")
-            httpClient.newCall(request).execute().use { response ->
-                response.body()?.string()?.let { foodJson ->
-                    val foodList = Json.decodeFromString<List<Food>>(foodJson).sortedBy { it.name }
-                    onResult(foodList.last())
-                    return@launch
-                }
-                println("Не удалось распарсить ответ")
-                onResult(null)
-            }
+            val foodList = websiteHttpClient.getTable().sortedBy { it.name }
+            onResult(foodList.last())
         } catch (e: Exception) {
             e.printStackTrace()
             onResult(null)

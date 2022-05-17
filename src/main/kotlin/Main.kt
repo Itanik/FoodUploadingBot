@@ -84,30 +84,34 @@ fun main(appArgs: Array<String>) {
 
             command("status") {
                 if (!hasAccess(message.chat.username)) return@command
-                interactor.getLastMenuModificationTime { menu ->
+                interactor.getLastAddedMenu { menu ->
                     if (menu == null) {
                         bot.sendMessage(
                             ChatId.fromId(message.chat.id),
                             "Не удалось получить информацию о последнем файле меню"
                         )
-                        return@getLastMenuModificationTime
+                        return@getLastAddedMenu
                     }
                     bot.sendMessage(
                         ChatId.fromId(message.chat.id),
-                        "Последний файл меню:\n\nИмя - ${menu.name}\n\nДата загрузки - ${menu.lastModificationDate}"
+                        "Последний файл меню:\n\n" +
+                                "Имя - ${menu.name ?: "Неизвестно"}\n\n" +
+                                "Дата загрузки - ${menu.lastModificationDate ?: "Неизвестно"}"
                     )
                 }
-                interactor.getLastTableModificationTime { table ->
+                interactor.getLastAddedFoodTable { table ->
                     if (table == null) {
                         bot.sendMessage(
                             ChatId.fromId(message.chat.id),
                             "Не удалось получить информацию по последней таблице"
                         )
-                        return@getLastTableModificationTime
+                        return@getLastAddedFoodTable
                     }
                     bot.sendMessage(
                         ChatId.fromId(message.chat.id),
-                        "Последняя таблица:\n\nИмя - ${table.name}\n\nДата загрузки - ${table.lastModificationDate}"
+                        "Последняя таблица:\n\n" +
+                                "Имя - ${table.name}\n\n" +
+                                "Дата загрузки - ${table.lastModificationDate ?: "Неизвестно"}"
                     )
                 }
             }
