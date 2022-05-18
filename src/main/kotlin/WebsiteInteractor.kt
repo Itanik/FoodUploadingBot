@@ -4,6 +4,7 @@ import Strings.tableAlreadyProcessed
 import Strings.tableUploadedSuccessfully
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.files.Document
+import com.github.kotlintelegrambot.entities.files.PhotoSize
 import data.Credentials
 import data.Food
 import data.Menu
@@ -49,6 +50,18 @@ class WebsiteInteractor {
             it.readText()
         }
         return Json.decodeFromString(credJson)
+    }
+
+    fun processPhoto(bot: Bot, photoSize: PhotoSize, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
+        onResult(ProcessingResult.InProgress)
+        val file = downloadPhoto(bot, photoSize)
+        if (file == null) {
+            onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
+            return@launch
+        }
+
+        val result = uploadMenu(file)
+        onResult(result)
     }
 
     fun processFile(bot: Bot, document: Document, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
@@ -102,6 +115,11 @@ class WebsiteInteractor {
     private fun downloadFile(bot: Bot, document: Document): File? {
         val bytes = bot.downloadFileBytes(document.fileId) ?: return null
         return FileManager.createFile(document.fileName!!).apply { writeBytes(bytes) }
+    }
+
+    private fun downloadPhoto(bot: Bot, photoSize: PhotoSize): File? {
+        val bytes = bot.downloadFileBytes(photoSize.fileId) ?: return null
+        return FileManager.createFile(photoSize.fileId.plus(".jpg")).apply { writeBytes(bytes) }
     }
 
     private suspend fun isMenuAlreadyUploaded(menuFileName: String): Boolean = try {

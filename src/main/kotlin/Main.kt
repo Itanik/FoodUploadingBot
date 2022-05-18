@@ -61,7 +61,42 @@ fun main(appArgs: Array<String>) {
 
             photos {
                 if (!hasAccess(message.chat.username)) return@photos
-                bot.sendMessage(ChatId.fromId(message.chat.id), Strings.hintUseFullPhoto)
+                message.photo?.last()?.let { photo ->
+
+                    interactor.processPhoto(bot, photo) { result ->
+                        when (result) {
+                            is ProcessingResult.InProgress ->
+                                bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
+                            is ProcessingResult.Success -> {
+                                val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
+                                    listOf(
+                                        InlineKeyboardButton.Url(
+                                            text = Strings.checkMenuBtnText,
+                                            url = interactor.credentials.menuPage
+                                        )
+                                    ),
+                                )
+
+                                bot.sendMessage(
+                                    chatId = ChatId.fromId(update.message!!.chat.id),
+                                    text = result.data,
+                                    parseMode = MARKDOWN,
+                                    replyMarkup = inlineKeyboardMarkup
+                                )
+                            }
+                            is ProcessingResult.Error ->
+                                bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                            is ProcessingResult.AlreadyUploaded ->
+                                bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                            else ->
+                                bot.sendMessage(
+                                    ChatId.fromId(message.chat.id),
+                                    "Что-то пошло не так при обработке фото..."
+                                )
+                        }
+                    }
+                }
+//                bot.sendMessage(ChatId.fromId(message.chat.id), Strings.hintUseFullPhoto)
             }
 
             document {
