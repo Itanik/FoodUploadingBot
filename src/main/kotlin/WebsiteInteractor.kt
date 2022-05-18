@@ -65,9 +65,20 @@ class WebsiteInteractor {
     }
 
     fun processFile(bot: Bot, document: Document, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
-        when (document.fileName?.extension ?: "") {
-            "jpg", "jpeg", "png", "pdf" -> {
+        when (document.fileName?.extension?.lowercase() ?: "") {
+            "jpg", "jpeg", "png", "heic", "pdf" -> {
+                try {
+                    if (isMenuAlreadyUploaded(document.fileName!!)) {
+                        onResult(ProcessingResult.AlreadyUploaded(menuAlreadyProcessed))
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    onResult(ProcessingResult.Error("Ошибка: ${e.message}"))
+                }
+
                 onResult(ProcessingResult.InProgress)
+
                 val file = downloadFile(bot, document)
                 if (file == null) {
                     onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
@@ -78,7 +89,18 @@ class WebsiteInteractor {
                 onResult(result)
             }
             "xlsx" -> {
+                try {
+                    if (isTableAlreadyUploaded(document.fileName!!)) {
+                        onResult(ProcessingResult.AlreadyUploaded(tableAlreadyProcessed))
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    onResult(ProcessingResult.Error("Ошибка: ${e.message}"))
+                }
+
                 onResult(ProcessingResult.InProgress)
+
                 val file = downloadFile(bot, document)
                 if (file == null) {
                     onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
@@ -128,12 +150,8 @@ class WebsiteInteractor {
         throw Exception("Не могу проверить последнее загруженное меню")
     }
 
-    private suspend fun uploadMenu(menuFile: File): ProcessingResult {
+    private fun uploadMenu(menuFile: File): ProcessingResult {
         return try {
-            // TODO: переместить проверку до скачивания файла, чтобы не засорять temp
-            if (isMenuAlreadyUploaded(menuFile.name))
-                return ProcessingResult.AlreadyUploaded(menuAlreadyProcessed)
-
             ftpManager.connect()
 
             val path = uploadMenuFile(menuFile)
@@ -184,11 +202,8 @@ class WebsiteInteractor {
         throw Exception("Не могу проверить последнюю загруженную таблицу")
     }
 
-    private suspend fun uploadTable(tableFile: File): ProcessingResult {
+    private fun uploadTable(tableFile: File): ProcessingResult {
         return try {
-            if (isTableAlreadyUploaded(tableFile.name))
-                return ProcessingResult.AlreadyUploaded(tableAlreadyProcessed)
-
             ftpManager.connect()
 
             val isFileUploaded = ftpManager.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream())
