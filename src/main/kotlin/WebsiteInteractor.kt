@@ -12,7 +12,6 @@ import ftp.FTPManager
 import kotlinx.coroutines.Dispatchers.Default
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -36,21 +35,13 @@ sealed class ProcessingResult {
 /**
  *  Выполняет функции общения с сайтом, адрес которого указан в credentials.json
  */
-class WebsiteInteractor {
+class WebsiteInteractor(credentials: Credentials) {
     private val scope = MainScope()
-    val credentials = readCredentialsFile()
-    private val ftpManager by lazy { FTPManager(credentials) }
+    private val ftpManager = FTPManager(credentials)
     private val timeFormatter: DateTimeFormatter by lazy {
         DateTimeFormatter.ofPattern(dateTimeFormat)
     }
-    private val websiteHttpClient by lazy { WebsiteHttpClient(credentials) }
-
-    private fun readCredentialsFile(): Credentials {
-        val credJson = FileManager.credentialsFile.bufferedReader().use {
-            it.readText()
-        }
-        return Json.decodeFromString(credJson)
-    }
+    private val websiteHttpClient = WebsiteHttpClient(credentials)
 
     fun processPhoto(bot: Bot, photoSize: PhotoSize, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
         onResult(ProcessingResult.InProgress)

@@ -1,23 +1,28 @@
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.*
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.Message
+import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.ParseMode.MARKDOWN
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.logging.LogLevel
+import data.Credentials
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 private lateinit var allowedUsers: List<String>
 
-fun main(appArgs: Array<String>) {
-    val botToken = appArgs.firstOrNull() ?: throw Exception("You should provide telegram token in app args")
-    allowedUsers = appArgs.filterNot { it == botToken }
+fun main() {
+    val credentials = readCredentialsFile()
+    val botToken = credentials.token
+    allowedUsers = credentials.allowedUsers
     if (allowedUsers.isEmpty())
         throw Exception("You should provide nicknames of users, what will be able to use this bot")
-    if (!FileManager.credentialsFile.exists())
-        throw Exception("You should place credentials.json file in app root folder (from where you run it)")
 
-    val interactor = WebsiteInteractor()
+    val interactor = WebsiteInteractor(credentials)
 
     val bot = bot {
         token = botToken
@@ -28,8 +33,8 @@ fun main(appArgs: Array<String>) {
             command("start") {
                 if (!hasAccess(update.message?.chat?.username)) {
                     bot.sendMessage(
-                        chatId = ChatId.fromId(update.message!!.chat.id),
-                        text = Strings.greetingsBad,
+                        prevMessage = message,
+                        messageText = Strings.greetingsBad,
                         parseMode = MARKDOWN
                     )
                     return@command
@@ -41,8 +46,8 @@ fun main(appArgs: Array<String>) {
                 )
 
                 bot.sendMessage(
-                    chatId = ChatId.fromId(update.message!!.chat.id),
-                    text = Strings.greetingsOk,
+                    prevMessage = message,
+                    messageText = Strings.greetingsOk,
                     parseMode = MARKDOWN,
                     replyMarkup = inlineKeyboardMarkup
                 )
@@ -50,13 +55,13 @@ fun main(appArgs: Array<String>) {
             }
 
             callbackQuery("menu") {
-                val chatId = callbackQuery.message?.chat?.id ?: return@callbackQuery
-                bot.sendMessage(ChatId.fromId(chatId), text = Strings.menuClicked)
+                val prevMessage = callbackQuery.message ?: return@callbackQuery
+                bot.sendMessage(prevMessage, Strings.menuClicked)
             }
 
             callbackQuery("table") {
-                val chatId = callbackQuery.message?.chat?.id ?: return@callbackQuery
-                bot.sendMessage(ChatId.fromId(chatId), text = Strings.tableClicked)
+                val prevMessage = callbackQuery.message ?: return@callbackQuery
+                bot.sendMessage(prevMessage, Strings.tableClicked)
             }
 
             photos {
@@ -72,27 +77,24 @@ fun main(appArgs: Array<String>) {
                                     listOf(
                                         InlineKeyboardButton.Url(
                                             text = Strings.checkMenuBtnText,
-                                            url = interactor.credentials.menuPage
+                                            url = credentials.menuPage
                                         )
                                     ),
                                 )
 
                                 bot.sendMessage(
-                                    chatId = ChatId.fromId(update.message!!.chat.id),
-                                    text = result.data,
+                                    prevMessage = message,
+                                    messageText = result.data,
                                     parseMode = MARKDOWN,
                                     replyMarkup = inlineKeyboardMarkup
                                 )
                             }
                             is ProcessingResult.Error ->
-                                bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                                bot.sendMessage(message, result.message)
                             is ProcessingResult.AlreadyUploaded ->
-                                bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                                bot.sendMessage(message, result.message)
                             else ->
-                                bot.sendMessage(
-                                    ChatId.fromId(message.chat.id),
-                                    "Что-то пошло не так при обработке фото..."
-                                )
+                                bot.sendMessage(message, "Что-то пошло не так при обработке фото...")
                         }
                     }
                 }
@@ -106,21 +108,21 @@ fun main(appArgs: Array<String>) {
                 interactor.processFile(bot, document) { result ->
                     when (result) {
                         is ProcessingResult.InProgress ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
+                            bot.sendMessage(message, "Начинаю загрузку на сайт")
                         is ProcessingResult.Success -> when (result.fileType) {
                             FileType.MENU -> {
                                 val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
                                     listOf(
                                         InlineKeyboardButton.Url(
                                             text = Strings.checkMenuBtnText,
-                                            url = interactor.credentials.menuPage
+                                            url = credentials.menuPage
                                         )
                                     ),
                                 )
 
                                 bot.sendMessage(
-                                    chatId = ChatId.fromId(update.message!!.chat.id),
-                                    text = result.data,
+                                    prevMessage = message,
+                                    messageText = result.data,
                                     parseMode = MARKDOWN,
                                     replyMarkup = inlineKeyboardMarkup
                                 )
@@ -130,14 +132,14 @@ fun main(appArgs: Array<String>) {
                                     listOf(
                                         InlineKeyboardButton.Url(
                                             text = Strings.checkTableBtnText,
-                                            url = interactor.credentials.tablePage
+                                            url = credentials.tablePage
                                         )
                                     ),
                                 )
 
                                 bot.sendMessage(
-                                    chatId = ChatId.fromId(update.message!!.chat.id),
-                                    text = result.data,
+                                    prevMessage = message,
+                                    messageText = result.data,
                                     parseMode = MARKDOWN,
                                     replyMarkup = inlineKeyboardMarkup
                                 )
@@ -145,11 +147,11 @@ fun main(appArgs: Array<String>) {
                         }
 
                         is ProcessingResult.ErrorWrongDocumentType ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), "Неверный формат файла.")
+                            bot.sendMessage(message, "Неверный формат файла.")
                         is ProcessingResult.Error ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                            bot.sendMessage(message, result.message)
                         is ProcessingResult.AlreadyUploaded ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), result.message)
+                            bot.sendMessage(message, result.message)
                     }
                 }
             }
@@ -159,13 +161,13 @@ fun main(appArgs: Array<String>) {
                 interactor.getLastAddedMenu { menu ->
                     if (menu == null) {
                         bot.sendMessage(
-                            ChatId.fromId(message.chat.id),
+                            message,
                             "Не удалось получить информацию о последнем файле меню"
                         )
                         return@getLastAddedMenu
                     }
                     bot.sendMessage(
-                        ChatId.fromId(message.chat.id),
+                        message,
                         "Последний файл меню:\n\n" +
                                 "Имя - ${menu.name ?: "Неизвестно"}\n\n" +
                                 "Дата загрузки - ${menu.lastModificationDate ?: "Неизвестно"}"
@@ -173,14 +175,11 @@ fun main(appArgs: Array<String>) {
                 }
                 interactor.getLastAddedFoodTable { table ->
                     if (table == null) {
-                        bot.sendMessage(
-                            ChatId.fromId(message.chat.id),
-                            "Не удалось получить информацию по последней таблице"
-                        )
+                        bot.sendMessage(message, "Не удалось получить информацию по последней таблице")
                         return@getLastAddedFoodTable
                     }
                     bot.sendMessage(
-                        ChatId.fromId(message.chat.id),
+                        message,
                         "Последняя таблица:\n\n" +
                                 "Имя - ${table.name}\n\n" +
                                 "Дата загрузки - ${table.lastModificationDate ?: "Неизвестно"}"
@@ -202,3 +201,32 @@ private fun hasAccess(username: String?) =
         false
     else
         allowedUsers.contains(username)
+
+private fun readCredentialsFile(): Credentials {
+    if (!FileManager.credentialsFile.exists())
+        throw Exception("You should place credentials.json file in app root folder (from where you run it)")
+    val credJson = FileManager.credentialsFile.bufferedReader().use {
+        it.readText()
+    }
+    return Json.decodeFromString(credJson)
+}
+
+private fun Bot.sendMessage(
+    prevMessage: Message,
+    messageText: String,
+    parseMode: ParseMode? = null,
+    replyMarkup: InlineKeyboardMarkup? = null
+) {
+    println(
+        "Sending message to user ${prevMessage.chat.username}. " +
+                "Text: $messageText. " +
+                "Parse mode: ${parseMode != null}. " +
+                "Reply markup: ${replyMarkup != null}"
+    )
+    sendMessage(
+        chatId = ChatId.fromId(prevMessage.chat.id),
+        text = messageText,
+        parseMode = parseMode,
+        replyMarkup = replyMarkup
+    )
+}
