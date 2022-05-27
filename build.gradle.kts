@@ -4,6 +4,8 @@ plugins {
     kotlin("jvm") version "1.6.20"
     application
     id("org.jetbrains.kotlin.plugin.serialization") version "1.6.20"
+    java
+    id("com.bmuschko.docker-java-application") version "7.4.0"
 }
 
 group = "me.itanik"
@@ -28,6 +30,14 @@ tasks.test {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
+}
+
+docker {
+    javaApplication {
+        baseImage.set("openjdk:8-jre-slim")
+        maintainer.set("Nikita Ulyantsev 'yan.xhrome@gmail.com'")
+        images.set(setOf("xhrome/fooduploadingbot:latest"))
+    }
 }
 
 application {
