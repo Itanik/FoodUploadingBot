@@ -204,7 +204,7 @@ private fun hasAccess(username: String?) =
 
 private fun readCredentialsFile(): Credentials {
     if (!FileManager.credentialsFile.exists())
-        throw Exception("You should place credentials.json file in app root folder (from where you run it)")
+        throw Exception("You should place credentials.json file in data folder (from where you run it)")
     val credJson = FileManager.credentialsFile.bufferedReader().use {
         it.readText()
     }

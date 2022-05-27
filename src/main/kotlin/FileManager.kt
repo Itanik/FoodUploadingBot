@@ -5,7 +5,7 @@ object FileManager {
         get() = File(tempDirName).apply { mkdir() }
 
     val credentialsFile: File
-        get() = File("credentials.json")
+        get() = File("data/credentials.json")
 
     fun createFile(filename: String) = File(tempDir, filename).apply { createNewFile() }
 
