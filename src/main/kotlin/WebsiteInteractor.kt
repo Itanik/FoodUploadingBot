@@ -1,3 +1,5 @@
+import Strings.lastFileDeleted
+import Strings.lastFileDidntDeleted
 import Strings.menuAlreadyProcessed
 import Strings.menuUploadedSuccessfully
 import Strings.tableAlreadyProcessed
@@ -9,9 +11,8 @@ import data.Credentials
 import data.Food
 import data.Menu
 import ftp.FTPManager
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Default
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -30,6 +31,11 @@ sealed class ProcessingResult {
     object ErrorWrongDocumentType : ProcessingResult()
     data class Error(val message: String) : ProcessingResult()
     data class AlreadyUploaded(val message: String) : ProcessingResult()
+}
+
+sealed class DeletingResult {
+    data class Success(val message: String) : DeletingResult()
+    data class Error(val message: String) : DeletingResult()
 }
 
 /**
@@ -79,6 +85,7 @@ class WebsiteInteractor(credentials: Credentials) {
                 val result = uploadMenu(file)
                 onResult(result)
             }
+
             "xlsx" -> {
                 try {
                     if (isTableAlreadyUploaded(document.fileName!!)) {
@@ -100,6 +107,7 @@ class WebsiteInteractor(credentials: Credentials) {
                 val result = uploadTable(file)
                 onResult(result)
             }
+
             else -> {
                 onResult(ProcessingResult.ErrorWrongDocumentType)
             }
@@ -212,6 +220,39 @@ class WebsiteInteractor(credentials: Credentials) {
         } finally {
             ftpManager.disconnect()
         }
+    }
+
+    fun checkLastAddedFile(): Food? {
+        ftpManager.commit {
+            return ftpManager.getLastAddedFile()
+        }
+        return null
+    }
+
+    fun deleteLastFileOnServer(): DeletingResult {
+        return try {
+            ftpManager.connect()
+            val lastAddedFile = ftpManager.getLastAddedFile()
+                ?: return DeletingResult.Error(lastFileDidntDeleted.format(", файл не найден"))
+
+            if (!ftpManager.deleteFile(lastAddedFile.path))
+                DeletingResult.Error(lastFileDidntDeleted.format(""))
+
+            uploadUpdatedFoodFilesJson()
+            DeletingResult.Success(lastFileDeleted.format(lastAddedFile.name))
+        } catch (e: Exception) {
+            DeletingResult.Error(lastFileDidntDeleted.format(", причина: ${e.message}"))
+        } finally {
+            ftpManager.disconnect()
+        }
+    }
+
+    fun updateJson(): Boolean {
+        ftpManager.commit {
+            uploadUpdatedFoodFilesJson()
+            return true
+        }
+        return false
     }
 
     private fun deleteFile(file: File) {

@@ -28,7 +28,7 @@ internal class FTPManagerTest {
 
     @Test
     fun getLastAddedFilePath() {
-        val file = ftpManager.getLastAddedFilePath()
+        val file = ftpManager.getLastAddedFile()
         println(file)
         assertNotNull(file)
     }

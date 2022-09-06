@@ -20,4 +20,7 @@ object Strings {
 
     const val tableUploadedSuccessfully = "Таблица успешно загружена"
     const val menuUploadedSuccessfully = "Меню успешно загружено"
+
+    const val lastFileDeleted = "Файл %s успешно удален"
+    const val lastFileDidntDeleted = "Не удалось удалить файл%s"
 }

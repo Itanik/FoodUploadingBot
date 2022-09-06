@@ -57,7 +57,7 @@ class FTPManager(private val credentials: Credentials) {
     /**
      * Возвращает последний загруженный на сервер Food файл
      */
-    fun getLastAddedFilePath(): Food? =
+    fun getLastAddedFile(): Food? =
         getTableFilesList()
             .map { it to parseDateTimeString(it.lastModificationDate) }
             .sortedBy { (_, date) -> date }
@@ -87,5 +87,16 @@ class FTPManager(private val credentials: Credentials) {
         println("Starting to upload file on: $path")
         client.setFileType(FTP.BINARY_FILE_TYPE)
         return file.use { client.storeFile(path, it) }
+    }
+
+    inline fun commit(action: ()-> Unit) {
+        try {
+            connect()
+            action()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            disconnect()
+        }
     }
 }

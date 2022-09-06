@@ -21,6 +21,9 @@ fun main() {
     allowedUsers = credentials.allowedUsers
     if (allowedUsers.isEmpty())
         throw Exception("You should provide nicknames of users, what will be able to use this bot")
+    var deleteScheduled = false
+
+    println("Суперюзер: ${credentials.allowedUsers.first()}")
 
     val interactor = WebsiteInteractor(credentials)
 
@@ -54,6 +57,87 @@ fun main() {
 
             }
 
+            command("deletelast") {
+                if (message.chat.username != credentials.allowedUsers.first()) {
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "У вас недостаточно прав для выполнения этой операции"
+                    )
+                    return@command
+                }
+                if (deleteScheduled) return@command
+                deleteScheduled = true
+
+                val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
+                    listOf(InlineKeyboardButton.CallbackData(text = "Да", callbackData = "delete-yes")),
+                    listOf(InlineKeyboardButton.CallbackData(text = "Нет", callbackData = "delete-no"))
+                )
+
+                val lastFile = interactor.checkLastAddedFile()
+
+                if (lastFile == null)
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "Ошибка",
+                    )
+                else
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "Вы уверены, что хотите удалить файл \"${lastFile.name}\"?",
+                        parseMode = MARKDOWN,
+                        replyMarkup = inlineKeyboardMarkup
+                    )
+                deleteScheduled = false
+            }
+
+            command("updatejson") {
+                if (message.chat.username != credentials.allowedUsers.first()) {
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "У вас недостаточно прав для выполнения этой операции"
+                    )
+                    return@command
+                }
+                if (interactor.updateJson())
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "Json файл успешно обновлен"
+                    )
+                else
+                    bot.sendMessage(
+                        prevMessage = message,
+                        messageText = "Ошибка при обновлении"
+                    )
+            }
+
+            callbackQuery("delete-yes") {
+                val prevMessage = callbackQuery.message ?: return@callbackQuery
+                if (prevMessage.chat.username != credentials.allowedUsers.first()) {
+                    bot.sendMessage(
+                        prevMessage = prevMessage,
+                        messageText = "У вас недостаточно прав для выполнения этой операции"
+                    )
+                    return@callbackQuery
+                }
+                bot.deleteMessage(ChatId.fromId(prevMessage.chat.id), prevMessage.messageId)
+                when (val result = interactor.deleteLastFileOnServer()) {
+                    is DeletingResult.Success -> bot.sendMessage(
+                        prevMessage = prevMessage,
+                        messageText = result.message
+                    )
+
+                    is DeletingResult.Error -> bot.sendMessage(
+                        prevMessage = prevMessage,
+                        messageText = result.message
+                    )
+                }
+            }
+
+            callbackQuery("delete-no") {
+                val prevMessage = callbackQuery.message ?: return@callbackQuery
+                bot.deleteMessage(ChatId.fromId(prevMessage.chat.id), prevMessage.messageId)
+            }
+
             callbackQuery("menu") {
                 val prevMessage = callbackQuery.message ?: return@callbackQuery
                 bot.sendMessage(prevMessage, Strings.menuClicked)
@@ -72,6 +156,7 @@ fun main() {
                         when (result) {
                             is ProcessingResult.InProgress ->
                                 bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
+
                             is ProcessingResult.Success -> {
                                 val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
                                     listOf(
@@ -89,10 +174,13 @@ fun main() {
                                     replyMarkup = inlineKeyboardMarkup
                                 )
                             }
+
                             is ProcessingResult.Error ->
                                 bot.sendMessage(message, result.message)
+
                             is ProcessingResult.AlreadyUploaded ->
                                 bot.sendMessage(message, result.message)
+
                             else ->
                                 bot.sendMessage(message, "Что-то пошло не так при обработке фото...")
                         }
@@ -109,6 +197,7 @@ fun main() {
                     when (result) {
                         is ProcessingResult.InProgress ->
                             bot.sendMessage(message, "Начинаю загрузку на сайт")
+
                         is ProcessingResult.Success -> when (result.fileType) {
                             FileType.MENU -> {
                                 val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
@@ -127,6 +216,7 @@ fun main() {
                                     replyMarkup = inlineKeyboardMarkup
                                 )
                             }
+
                             FileType.TABLE -> {
                                 val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
                                     listOf(
@@ -148,8 +238,10 @@ fun main() {
 
                         is ProcessingResult.ErrorWrongDocumentType ->
                             bot.sendMessage(message, "Неверный формат файла.")
+
                         is ProcessingResult.Error ->
                             bot.sendMessage(message, result.message)
+
                         is ProcessingResult.AlreadyUploaded ->
                             bot.sendMessage(message, result.message)
                     }
