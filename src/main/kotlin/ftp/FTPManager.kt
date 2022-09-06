@@ -51,7 +51,7 @@ class FTPManager(private val credentials: Credentials) {
     fun getTableFilesList(): List<Food> =
         client.listFiles(foodPath)
             .filter { it.name.endsWith("-sm.xlsx") }
-            .map { Food(it.name, foodPath.plus(it), it.timestamp.toLocalDateTime().defaultFormat()) }
+            .map { Food(it.name, foodPath.plus(it.name), it.timestamp.toLocalDateTime().defaultFormat()) }
 
     /**
      * Загружает файл по пути host/path
