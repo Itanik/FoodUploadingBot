@@ -25,4 +25,11 @@ internal class FTPManagerTest {
     fun getTableFilesList() {
         assertTrue(ftpManager.getTableFilesList().isNotEmpty())
     }
+
+    @Test
+    fun getLastAddedFilePath() {
+        val file = ftpManager.getLastAddedFilePath()
+        println(file)
+        assertNotNull(file)
+    }
 }

@@ -4,4 +4,4 @@ import java.util.*
 
 fun Calendar.toLocalDateTime(): LocalDateTime = LocalDateTime.ofInstant(this.toInstant(), this.timeZone.toZoneId())
 
-fun LocalDateTime.defaultFormat(): String = format(DateTimeFormatter.ofPattern(dateTimeFormat))
+fun LocalDateTime.defaultFormat(): String = format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
