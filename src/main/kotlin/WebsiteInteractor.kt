@@ -23,12 +23,12 @@ enum class FileType {
     MENU_PHOTO, MENU_FILE, TABLE_FILE
 }
 
-sealed class ProcessingResult {
-    data class Success(val data: String, val fileType: FileType) : ProcessingResult()
-    object InProgress : ProcessingResult()
-    object ErrorWrongDocumentType : ProcessingResult()
-    data class Error(val message: String, val fileType: FileType) : ProcessingResult()
-    data class AlreadyUploaded(val fileType: FileType) : ProcessingResult()
+sealed class UploadingResult {
+    data class Success(val data: String, val fileType: FileType) : UploadingResult()
+    object InProgress : UploadingResult()
+    object ErrorWrongDocumentType : UploadingResult()
+    data class Error(val message: String, val fileType: FileType) : UploadingResult()
+    data class AlreadyUploaded(val fileType: FileType) : UploadingResult()
 }
 
 sealed class DeletingResult {
@@ -47,11 +47,11 @@ class WebsiteInteractor(credentials: Credentials) {
     }
     private val websiteHttpClient = WebsiteHttpClient(credentials)
 
-    fun uploadMenuPhoto(bot: Bot, photoSize: PhotoSize, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
-        onResult(ProcessingResult.InProgress)
+    fun uploadMenuPhoto(bot: Bot, photoSize: PhotoSize, onResult: (UploadingResult) -> Unit) = scope.launch(Default) {
+        onResult(UploadingResult.InProgress)
         val file = downloadPhoto(bot, photoSize)
         if (file == null) {
-            onResult(ProcessingResult.Error("Ошибка при скачивании файла", FileType.MENU_PHOTO))
+            onResult(UploadingResult.Error("Ошибка при скачивании файла", FileType.MENU_PHOTO))
             return@launch
         }
 
@@ -59,25 +59,25 @@ class WebsiteInteractor(credentials: Credentials) {
         onResult(result)
     }
 
-    fun uploadFile(bot: Bot, document: Document, forceUpdate: Boolean = false, onResult: (ProcessingResult) -> Unit) =
+    fun uploadFile(bot: Bot, document: Document, forceUpdate: Boolean = false, onResult: (UploadingResult) -> Unit) =
         scope.launch(Default) {
             when (document.fileName?.extension?.lowercase() ?: "") {
                 "jpg", "jpeg", "png", "heic", "pdf" -> {
                     try {
                         if (!forceUpdate && isMenuAlreadyUploaded(document.fileName!!)) {
-                            onResult(ProcessingResult.AlreadyUploaded(FileType.MENU_FILE))
+                            onResult(UploadingResult.AlreadyUploaded(FileType.MENU_FILE))
                             return@launch
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        onResult(ProcessingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE))
+                        onResult(UploadingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE))
                     }
 
-                    onResult(ProcessingResult.InProgress)
+                    onResult(UploadingResult.InProgress)
 
                     val file = downloadFile(bot, document)
                     if (file == null) {
-                        onResult(ProcessingResult.Error("Ошибка при скачивании файла", FileType.MENU_FILE))
+                        onResult(UploadingResult.Error("Ошибка при скачивании файла", FileType.MENU_FILE))
                         return@launch
                     }
 
@@ -88,19 +88,19 @@ class WebsiteInteractor(credentials: Credentials) {
                 "xlsx" -> {
                     try {
                         if (!forceUpdate && isTableAlreadyUploaded(document.fileName!!)) {
-                            onResult(ProcessingResult.AlreadyUploaded(FileType.TABLE_FILE))
+                            onResult(UploadingResult.AlreadyUploaded(FileType.TABLE_FILE))
                             return@launch
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        onResult(ProcessingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE))
+                        onResult(UploadingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE))
                     }
 
-                    onResult(ProcessingResult.InProgress)
+                    onResult(UploadingResult.InProgress)
 
                     val file = downloadFile(bot, document)
                     if (file == null) {
-                        onResult(ProcessingResult.Error("Ошибка при скачивании файла",FileType.TABLE_FILE))
+                        onResult(UploadingResult.Error("Ошибка при скачивании файла",FileType.TABLE_FILE))
                         return@launch
                     }
                     val result = uploadTable(file)
@@ -108,7 +108,7 @@ class WebsiteInteractor(credentials: Credentials) {
                 }
 
                 else -> {
-                    onResult(ProcessingResult.ErrorWrongDocumentType)
+                    onResult(UploadingResult.ErrorWrongDocumentType)
                 }
             }
         }
@@ -148,7 +148,7 @@ class WebsiteInteractor(credentials: Credentials) {
         throw Exception("Не могу проверить последнее загруженное меню")
     }
 
-    private fun uploadMenu(menuFile: File): ProcessingResult {
+    private fun uploadMenu(menuFile: File): UploadingResult {
         return try {
             ftpManager.connect()
 
@@ -156,10 +156,10 @@ class WebsiteInteractor(credentials: Credentials) {
             uploadMenuJson(path, menuFile.name)
             deleteFile(menuFile)
 
-            ProcessingResult.Success(menuUploadedSuccessfully, FileType.MENU_FILE)
+            UploadingResult.Success(menuUploadedSuccessfully, FileType.MENU_FILE)
         } catch (e: Exception) {
             e.printStackTrace()
-            ProcessingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE)
+            UploadingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE)
         } finally {
             ftpManager.disconnect()
         }
@@ -200,7 +200,7 @@ class WebsiteInteractor(credentials: Credentials) {
         throw Exception("Не могу проверить последнюю загруженную таблицу")
     }
 
-    private fun uploadTable(tableFile: File): ProcessingResult {
+    private fun uploadTable(tableFile: File): UploadingResult {
         return try {
             ftpManager.connect()
 
@@ -209,13 +209,13 @@ class WebsiteInteractor(credentials: Credentials) {
                 println("Successfully uploaded ${tableFile.name}!")
                 uploadUpdatedFoodFilesJson()
                 deleteFile(tableFile)
-                ProcessingResult.Success(tableUploadedSuccessfully, FileType.TABLE_FILE)
+                UploadingResult.Success(tableUploadedSuccessfully, FileType.TABLE_FILE)
             } else
-                ProcessingResult.Error("Не удалось загрузить файл таблицы", FileType.TABLE_FILE)
+                UploadingResult.Error("Не удалось загрузить файл таблицы", FileType.TABLE_FILE)
 
         } catch (e: Exception) {
             e.printStackTrace()
-            ProcessingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE)
+            UploadingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE)
         } finally {
             ftpManager.disconnect()
         }

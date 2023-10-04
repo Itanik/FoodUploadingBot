@@ -40,12 +40,12 @@ fun foodBot(
     var deleteScheduled = false
     var docToReplace: Document? = null
 
-    fun processUploadingResult(result: ProcessingResult, bot: Bot, prevMessage: Message) {
+    fun processUploadingResult(result: UploadingResult, bot: Bot, prevMessage: Message) {
         when (result) {
-            ProcessingResult.InProgress ->
+            UploadingResult.InProgress ->
                 bot.sendMessage(ChatId.fromId(prevMessage.chat.id), Strings.uploadingStarted)
 
-            is ProcessingResult.Success -> {
+            is UploadingResult.Success -> {
                 val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
                     listOf(
                         if (result.fileType == FileType.TABLE_FILE)
@@ -69,8 +69,8 @@ fun foodBot(
                 )
             }
 
-            is ProcessingResult.Error -> bot.sendMessage(prevMessage, result.message)
-            is ProcessingResult.AlreadyUploaded -> if (result.fileType == FileType.MENU_FILE)
+            is UploadingResult.Error -> bot.sendMessage(prevMessage, result.message)
+            is UploadingResult.AlreadyUploaded -> if (result.fileType == FileType.MENU_FILE)
                 bot.sendMessage(prevMessage, Strings.menuAlreadyUploaded)
             else
                 bot.sendMessage(
@@ -85,7 +85,7 @@ fun foodBot(
                     ),
                 )
 
-            ProcessingResult.ErrorWrongDocumentType -> bot.sendMessage(prevMessage, Strings.wrongFileType)
+            UploadingResult.ErrorWrongDocumentType -> bot.sendMessage(prevMessage, Strings.wrongFileType)
         }
     }
 
