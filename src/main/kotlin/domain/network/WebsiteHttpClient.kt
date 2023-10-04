@@ -18,12 +18,12 @@ class WebsiteHttpClient(private val credentials: Credentials) {
     private val httpClient = OkHttpClient.Builder().build()
 
     suspend fun getMenu(): Menu {
-        val menuJson = callForJson("https://${credentials.host}$foodPath$menuJsonFileName")
+        val menuJson = callForJson("http://${credentials.host}$foodPath$menuJsonFileName")
         return Json.decodeFromString(menuJson)
     }
 
     suspend fun getTable(): List<Food> {
-        val foodListJson = callForJson("https://${credentials.host}$foodPath$foodJsonFileName")
+        val foodListJson = callForJson("http://${credentials.host}$foodPath$foodJsonFileName")
         return Json.decodeFromString(foodListJson)
     }
 
