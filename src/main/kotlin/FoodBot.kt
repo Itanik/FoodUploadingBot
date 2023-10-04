@@ -10,6 +10,11 @@ import com.github.kotlintelegrambot.entities.ParseMode.MARKDOWN
 import com.github.kotlintelegrambot.entities.files.Document
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.logging.LogLevel
+import domain.interactors.DeletingResult
+import domain.interactors.FileType
+import domain.interactors.UploadingResult
+import domain.interactors.WebsiteInteractor
+import misc.Strings
 
 private object Commands {
     const val STATUS = "status"

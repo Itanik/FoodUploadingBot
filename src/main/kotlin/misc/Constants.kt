@@ -1,3 +1,5 @@
+package misc
+
 const val tempDirName = "tmp"
 
 const val foodPath = "/food/"

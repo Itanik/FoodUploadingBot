@@ -1,14 +1,14 @@
-package ftp
+package domain.ftp
 
 import data.Credentials
 import data.Food
-import defaultFormat
-import foodPath
+import misc.defaultFormat
+import misc.foodPath
 import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPClientConfig
 import org.apache.commons.net.ftp.FTPReply
-import toLocalDateTime
+import misc.toLocalDateTime
 import java.io.InputStream
 import java.time.LocalDateTime
 

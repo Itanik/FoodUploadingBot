@@ -1,3 +1,5 @@
+package misc
+
 object Strings {
     // Commands
     const val noPermissions = "У вас недостаточно прав для выполнения этой операции"

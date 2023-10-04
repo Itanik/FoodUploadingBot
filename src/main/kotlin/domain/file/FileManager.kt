@@ -1,3 +1,6 @@
+package domain.file
+
+import misc.tempDirName
 import java.io.File
 
 object FileManager {

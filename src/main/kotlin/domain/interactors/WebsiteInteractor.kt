@@ -1,18 +1,27 @@
-import Strings.deleteLastSuccess
-import Strings.deleteLastFailed
-import Strings.menuUploadedSuccessfully
-import Strings.tableUploadedSuccessfully
+package domain.interactors
+
+import misc.Strings.deleteLastSuccess
+import misc.Strings.deleteLastFailed
+import misc.Strings.menuUploadedSuccessfully
+import misc.Strings.tableUploadedSuccessfully
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.files.Document
 import com.github.kotlintelegrambot.entities.files.PhotoSize
 import data.Credentials
 import data.Food
 import data.Menu
-import ftp.FTPManager
+import domain.file.FileManager
+import misc.dateTimeFormat
+import misc.foodImageFileName
+import misc.foodJsonFileName
+import misc.foodPath
+import domain.ftp.FTPManager
+import domain.network.WebsiteHttpClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Default
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import misc.menuJsonFileName
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -100,7 +109,7 @@ class WebsiteInteractor(credentials: Credentials) {
 
                     val file = downloadFile(bot, document)
                     if (file == null) {
-                        onResult(UploadingResult.Error("Ошибка при скачивании файла",FileType.TABLE_FILE))
+                        onResult(UploadingResult.Error("Ошибка при скачивании файла", FileType.TABLE_FILE))
                         return@launch
                     }
                     val result = uploadTable(file)

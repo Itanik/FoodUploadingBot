@@ -1,8 +1,13 @@
+package domain.network
+
 import data.Credentials
 import data.Food
 import data.Menu
+import misc.foodJsonFileName
+import misc.foodPath
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import misc.menuJsonFileName
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlin.coroutines.resume
