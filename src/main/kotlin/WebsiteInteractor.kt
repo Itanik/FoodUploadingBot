@@ -1,8 +1,6 @@
-import Strings.lastFileDeleted
-import Strings.lastFileDidntDeleted
-import Strings.menuAlreadyProcessed
+import Strings.deleteLastSuccess
+import Strings.deleteLastFailed
 import Strings.menuUploadedSuccessfully
-import Strings.tableAlreadyProcessed
 import Strings.tableUploadedSuccessfully
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.files.Document
@@ -22,15 +20,15 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 enum class FileType {
-    MENU, TABLE
+    MENU_PHOTO, MENU_FILE, TABLE_FILE
 }
 
 sealed class ProcessingResult {
     data class Success(val data: String, val fileType: FileType) : ProcessingResult()
     object InProgress : ProcessingResult()
     object ErrorWrongDocumentType : ProcessingResult()
-    data class Error(val message: String) : ProcessingResult()
-    data class AlreadyUploaded(val message: String) : ProcessingResult()
+    data class Error(val message: String, val fileType: FileType) : ProcessingResult()
+    data class AlreadyUploaded(val fileType: FileType) : ProcessingResult()
 }
 
 sealed class DeletingResult {
@@ -49,11 +47,11 @@ class WebsiteInteractor(credentials: Credentials) {
     }
     private val websiteHttpClient = WebsiteHttpClient(credentials)
 
-    fun processPhoto(bot: Bot, photoSize: PhotoSize, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
+    fun uploadMenuPhoto(bot: Bot, photoSize: PhotoSize, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
         onResult(ProcessingResult.InProgress)
         val file = downloadPhoto(bot, photoSize)
         if (file == null) {
-            onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
+            onResult(ProcessingResult.Error("Ошибка при скачивании файла", FileType.MENU_PHOTO))
             return@launch
         }
 
@@ -61,58 +59,59 @@ class WebsiteInteractor(credentials: Credentials) {
         onResult(result)
     }
 
-    fun processFile(bot: Bot, document: Document, onResult: (ProcessingResult) -> Unit) = scope.launch(Default) {
-        when (document.fileName?.extension?.lowercase() ?: "") {
-            "jpg", "jpeg", "png", "heic", "pdf" -> {
-                try {
-                    if (isMenuAlreadyUploaded(document.fileName!!)) {
-                        onResult(ProcessingResult.AlreadyUploaded(menuAlreadyProcessed))
+    fun uploadFile(bot: Bot, document: Document, forceUpdate: Boolean = false, onResult: (ProcessingResult) -> Unit) =
+        scope.launch(Default) {
+            when (document.fileName?.extension?.lowercase() ?: "") {
+                "jpg", "jpeg", "png", "heic", "pdf" -> {
+                    try {
+                        if (!forceUpdate && isMenuAlreadyUploaded(document.fileName!!)) {
+                            onResult(ProcessingResult.AlreadyUploaded(FileType.MENU_FILE))
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        onResult(ProcessingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE))
+                    }
+
+                    onResult(ProcessingResult.InProgress)
+
+                    val file = downloadFile(bot, document)
+                    if (file == null) {
+                        onResult(ProcessingResult.Error("Ошибка при скачивании файла", FileType.MENU_FILE))
                         return@launch
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    onResult(ProcessingResult.Error("Ошибка: ${e.message}"))
+
+                    val result = uploadMenu(file)
+                    onResult(result)
                 }
 
-                onResult(ProcessingResult.InProgress)
+                "xlsx" -> {
+                    try {
+                        if (!forceUpdate && isTableAlreadyUploaded(document.fileName!!)) {
+                            onResult(ProcessingResult.AlreadyUploaded(FileType.TABLE_FILE))
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        onResult(ProcessingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE))
+                    }
 
-                val file = downloadFile(bot, document)
-                if (file == null) {
-                    onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
-                    return@launch
-                }
+                    onResult(ProcessingResult.InProgress)
 
-                val result = uploadMenu(file)
-                onResult(result)
-            }
-
-            "xlsx" -> {
-                try {
-                    if (isTableAlreadyUploaded(document.fileName!!)) {
-                        onResult(ProcessingResult.AlreadyUploaded(tableAlreadyProcessed))
+                    val file = downloadFile(bot, document)
+                    if (file == null) {
+                        onResult(ProcessingResult.Error("Ошибка при скачивании файла",FileType.TABLE_FILE))
                         return@launch
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    onResult(ProcessingResult.Error("Ошибка: ${e.message}"))
+                    val result = uploadTable(file)
+                    onResult(result)
                 }
 
-                onResult(ProcessingResult.InProgress)
-
-                val file = downloadFile(bot, document)
-                if (file == null) {
-                    onResult(ProcessingResult.Error("Ошибка при скачивании файла"))
-                    return@launch
+                else -> {
+                    onResult(ProcessingResult.ErrorWrongDocumentType)
                 }
-                val result = uploadTable(file)
-                onResult(result)
-            }
-
-            else -> {
-                onResult(ProcessingResult.ErrorWrongDocumentType)
             }
         }
-    }
 
     fun getLastAddedMenu(onResult: (Menu?) -> Unit) = scope.launch(Default) {
         try {
@@ -157,10 +156,10 @@ class WebsiteInteractor(credentials: Credentials) {
             uploadMenuJson(path, menuFile.name)
             deleteFile(menuFile)
 
-            ProcessingResult.Success(menuUploadedSuccessfully, FileType.MENU)
+            ProcessingResult.Success(menuUploadedSuccessfully, FileType.MENU_FILE)
         } catch (e: Exception) {
             e.printStackTrace()
-            ProcessingResult.Error("Ошибка: ${e.message}")
+            ProcessingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE)
         } finally {
             ftpManager.disconnect()
         }
@@ -210,19 +209,19 @@ class WebsiteInteractor(credentials: Credentials) {
                 println("Successfully uploaded ${tableFile.name}!")
                 uploadUpdatedFoodFilesJson()
                 deleteFile(tableFile)
-                ProcessingResult.Success(tableUploadedSuccessfully, FileType.TABLE)
+                ProcessingResult.Success(tableUploadedSuccessfully, FileType.TABLE_FILE)
             } else
-                ProcessingResult.Error("Не удалось загрузить файл таблицы")
+                ProcessingResult.Error("Не удалось загрузить файл таблицы", FileType.TABLE_FILE)
 
         } catch (e: Exception) {
             e.printStackTrace()
-            ProcessingResult.Error("Ошибка: ${e.message}")
+            ProcessingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE)
         } finally {
             ftpManager.disconnect()
         }
     }
 
-    fun checkLastAddedFile(): Food? {
+    fun getLastAddedFile(): Food? {
         ftpManager.commit {
             return ftpManager.getLastAddedFile()
         }
@@ -233,15 +232,15 @@ class WebsiteInteractor(credentials: Credentials) {
         return try {
             ftpManager.connect()
             val lastAddedFile = ftpManager.getLastAddedFile()
-                ?: return DeletingResult.Error(lastFileDidntDeleted.format(", файл не найден"))
+                ?: return DeletingResult.Error(deleteLastFailed.format(", файл не найден"))
 
             if (!ftpManager.deleteFile(lastAddedFile.path))
-                DeletingResult.Error(lastFileDidntDeleted.format(""))
+                DeletingResult.Error(deleteLastFailed.format(""))
 
             uploadUpdatedFoodFilesJson()
-            DeletingResult.Success(lastFileDeleted.format(lastAddedFile.name))
+            DeletingResult.Success(deleteLastSuccess.format(lastAddedFile.name))
         } catch (e: Exception) {
-            DeletingResult.Error(lastFileDidntDeleted.format(", причина: ${e.message}"))
+            DeletingResult.Error(deleteLastFailed.format(", причина: ${e.message}"))
         } finally {
             ftpManager.disconnect()
         }

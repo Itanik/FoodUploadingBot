@@ -7,8 +7,25 @@ import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.ParseMode.MARKDOWN
+import com.github.kotlintelegrambot.entities.files.Document
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.logging.LogLevel
+
+private object Commands {
+    const val STATUS = "status"
+    const val START = "start"
+    const val DELETE_LAST = "delete_last"
+    const val UPDATE_JSON = "update_json"
+}
+
+private object ButtonCallback {
+    const val MENU_HINT = "menu_hint"
+    const val TABLE_HINT = "table_hint"
+    const val DELETE_YES = "delete_yes"
+    const val DELETE_NO = "delete_no"
+    const val REPLACE_TABLE_YES = "replace_table_yes"
+    const val REPLACE_TABLE_NO = "replace_table_no"
+}
 
 fun foodBot(
     botToken: String,
@@ -17,97 +34,172 @@ fun foodBot(
     tablePageUrl: String,
     interactor: WebsiteInteractor,
 ) = bot {
-    fun hasAccess(username: String?) = username?.let { allowedUsers.contains(it) } ?: false
-
-    var deleteScheduled = false
     token = botToken
     timeout = 30
     logLevel = LogLevel.Network.Body
+    var deleteScheduled = false
+    var docToReplace: Document? = null
+
+    fun processUploadingResult(result: ProcessingResult, bot: Bot, prevMessage: Message) {
+        when (result) {
+            ProcessingResult.InProgress ->
+                bot.sendMessage(ChatId.fromId(prevMessage.chat.id), Strings.uploadingStarted)
+
+            is ProcessingResult.Success -> {
+                val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
+                    listOf(
+                        if (result.fileType == FileType.TABLE_FILE)
+                            InlineKeyboardButton.Url(
+                                text = Strings.checkTableBtnText,
+                                url = tablePageUrl,
+                            )
+                        else
+                            InlineKeyboardButton.Url(
+                                text = Strings.checkMenuBtnText,
+                                url = menuPageUrl,
+                            )
+                    ),
+                )
+
+                bot.sendMessage(
+                    prevMessage = prevMessage,
+                    messageText = result.data,
+                    parseMode = MARKDOWN,
+                    replyMarkup = inlineKeyboardMarkup,
+                )
+            }
+
+            is ProcessingResult.Error -> bot.sendMessage(prevMessage, result.message)
+            is ProcessingResult.AlreadyUploaded -> if (result.fileType == FileType.MENU_FILE)
+                bot.sendMessage(prevMessage, Strings.menuAlreadyUploaded)
+            else
+                bot.sendMessage(
+                    prevMessage = prevMessage,
+                    messageText = Strings.tableAlreadyUploaded,
+                    parseMode = MARKDOWN,
+                    replyMarkup = createCallbackButtons(
+                        mapOf(
+                            Strings.tableReplace to ButtonCallback.REPLACE_TABLE_YES,
+                            Strings.tableReplaceCancel to ButtonCallback.REPLACE_TABLE_NO,
+                        ),
+                    ),
+                )
+
+            ProcessingResult.ErrorWrongDocumentType -> bot.sendMessage(prevMessage, Strings.wrongFileType)
+        }
+    }
 
     dispatch {
-        command("start") {
-            if (!hasAccess(update.message?.chat?.username)) {
+        command(Commands.START) {
+            if (!allowedUsers.contains(message.chat.username)) {
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = Strings.greetingsBad,
+                    messageText = Strings.startHintNoPermissions,
                     parseMode = MARKDOWN
                 )
                 return@command
             }
 
-            val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
-                listOf(InlineKeyboardButton.CallbackData(text = Strings.menuBtnText, callbackData = "menu")),
-                listOf(InlineKeyboardButton.CallbackData(text = Strings.tableBtnText, callbackData = "table"))
-            )
-
             bot.sendMessage(
                 prevMessage = message,
-                messageText = Strings.greetingsOk,
+                messageText = Strings.startHindGreetings,
                 parseMode = MARKDOWN,
-                replyMarkup = inlineKeyboardMarkup
+                replyMarkup = createCallbackButtons(
+                    mapOf(
+                        Strings.startHintUploadMenuButton to ButtonCallback.MENU_HINT,
+                        Strings.startHintUploadTableButton to ButtonCallback.TABLE_HINT,
+                    )
+                ),
             )
 
         }
 
-        command("deletelast") {
+        command(Commands.STATUS) {
+            if (!allowedUsers.contains(message.chat.username)) return@command
+            interactor.getLastAddedMenu { menu ->
+                if (menu == null) {
+                    bot.sendMessage(
+                        message,
+                        Strings.statusMenuFetchFailed
+                    )
+                    return@getLastAddedMenu
+                }
+                bot.sendMessage(
+                    message,
+                    Strings.statusMenuFetchSuccess(menu.name, menu.lastModificationDate)
+                )
+            }
+            interactor.getLastAddedFoodTable { table ->
+                if (table == null) {
+                    bot.sendMessage(message, Strings.statusTableFetchFailed)
+                    return@getLastAddedFoodTable
+                }
+                bot.sendMessage(
+                    message,
+                    Strings.statusTableFetchSuccess(table.name, table.lastModificationDate)
+                )
+            }
+        }
+
+        command(Commands.DELETE_LAST) {
             if (message.chat.username != allowedUsers.first()) {
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "У вас недостаточно прав для выполнения этой операции"
+                    messageText = Strings.noPermissions
                 )
                 return@command
             }
             if (deleteScheduled) return@command
             deleteScheduled = true
 
-            val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
-                listOf(InlineKeyboardButton.CallbackData(text = "Да", callbackData = "delete-yes")),
-                listOf(InlineKeyboardButton.CallbackData(text = "Нет", callbackData = "delete-no"))
-            )
-
-            val lastFile = interactor.checkLastAddedFile()
+            val lastFile = interactor.getLastAddedFile()
 
             if (lastFile == null)
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "Ошибка",
+                    messageText = Strings.deleteLastNotFound,
                 )
             else
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "Вы уверены, что хотите удалить файл \"${lastFile.name}\"?",
+                    messageText = Strings.deleteLastQuestion.format(lastFile.name),
                     parseMode = MARKDOWN,
-                    replyMarkup = inlineKeyboardMarkup
+                    replyMarkup = createCallbackButtons(
+                        mapOf(
+                            Strings.deleteLastChoiceYes to ButtonCallback.DELETE_YES,
+                            Strings.deleteLastChoiceNo to ButtonCallback.DELETE_NO,
+                        )
+                    ),
                 )
             deleteScheduled = false
         }
 
-        command("updatejson") {
+        command(Commands.UPDATE_JSON) {
             if (message.chat.username != allowedUsers.first()) {
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "У вас недостаточно прав для выполнения этой операции"
+                    messageText = Strings.noPermissions
                 )
                 return@command
             }
             if (interactor.updateJson())
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "Json файл успешно обновлен"
+                    messageText = Strings.updateJsonSuccess
                 )
             else
                 bot.sendMessage(
                     prevMessage = message,
-                    messageText = "Ошибка при обновлении"
+                    messageText = Strings.updateJsonFailed
                 )
         }
 
-        callbackQuery("delete-yes") {
+        callbackQuery(ButtonCallback.DELETE_YES) {
             val prevMessage = callbackQuery.message ?: return@callbackQuery
             if (prevMessage.chat.username != allowedUsers.first()) {
                 bot.sendMessage(
                     prevMessage = prevMessage,
-                    messageText = "У вас недостаточно прав для выполнения этой операции"
+                    messageText = Strings.noPermissions
                 )
                 return@callbackQuery
             }
@@ -125,149 +217,57 @@ fun foodBot(
             }
         }
 
-        callbackQuery("delete-no") {
+        callbackQuery(ButtonCallback.DELETE_NO) {
             val prevMessage = callbackQuery.message ?: return@callbackQuery
             bot.deleteMessage(ChatId.fromId(prevMessage.chat.id), prevMessage.messageId)
         }
 
-        callbackQuery("menu") {
+        callbackQuery(ButtonCallback.REPLACE_TABLE_YES) {
             val prevMessage = callbackQuery.message ?: return@callbackQuery
-            bot.sendMessage(prevMessage, Strings.menuClicked)
+            bot.deleteMessage(ChatId.fromId(prevMessage.chat.id), prevMessage.messageId)
+            if (docToReplace == null) {
+                bot.sendMessage(prevMessage, Strings.docIsNull)
+                return@callbackQuery
+            }
+
+            interactor.uploadFile(bot, docToReplace!!, forceUpdate = true) { result ->
+                processUploadingResult(result, bot, prevMessage)
+            }
         }
 
-        callbackQuery("table") {
+        callbackQuery(ButtonCallback.REPLACE_TABLE_NO) {
             val prevMessage = callbackQuery.message ?: return@callbackQuery
-            bot.sendMessage(prevMessage, Strings.tableClicked)
+            docToReplace = null
+            bot.deleteMessage(ChatId.fromId(prevMessage.chat.id), prevMessage.messageId)
+        }
+
+        callbackQuery(ButtonCallback.MENU_HINT) {
+            val prevMessage = callbackQuery.message ?: return@callbackQuery
+            bot.sendMessage(prevMessage, Strings.startHintUploadMenuHint)
+        }
+
+        callbackQuery(ButtonCallback.TABLE_HINT) {
+            val prevMessage = callbackQuery.message ?: return@callbackQuery
+            bot.sendMessage(prevMessage, Strings.startHintUploadTableHint)
         }
 
         photos {
-            if (!hasAccess(message.chat.username)) return@photos
+            if (!allowedUsers.contains(message.chat.username)) return@photos
             message.photo?.last()?.let { photo ->
 
-                interactor.processPhoto(bot, photo) { result ->
-                    when (result) {
-                        is ProcessingResult.InProgress ->
-                            bot.sendMessage(ChatId.fromId(message.chat.id), "Начинаю загрузку на сайт")
-
-                        is ProcessingResult.Success -> {
-                            val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
-                                listOf(
-                                    InlineKeyboardButton.Url(
-                                        text = Strings.checkMenuBtnText,
-                                        url = menuPageUrl
-                                    )
-                                ),
-                            )
-
-                            bot.sendMessage(
-                                prevMessage = message,
-                                messageText = result.data,
-                                parseMode = MARKDOWN,
-                                replyMarkup = inlineKeyboardMarkup
-                            )
-                        }
-
-                        is ProcessingResult.Error ->
-                            bot.sendMessage(message, result.message)
-
-                        is ProcessingResult.AlreadyUploaded ->
-                            bot.sendMessage(message, result.message)
-
-                        else ->
-                            bot.sendMessage(message, "Что-то пошло не так при обработке фото...")
-                    }
+                interactor.uploadMenuPhoto(bot, photo) { result ->
+                    processUploadingResult(result, bot, message)
                 }
             }
-//                bot.sendMessage(ChatId.fromId(message.chat.id), Strings.hintUseFullPhoto)
         }
 
         document {
-            if (!hasAccess(message.chat.username)) return@document
+            if (!allowedUsers.contains(message.chat.username)) return@document
             val document = message.document ?: return@document
 
-            interactor.processFile(bot, document) { result ->
-                when (result) {
-                    is ProcessingResult.InProgress ->
-                        bot.sendMessage(message, "Начинаю загрузку на сайт")
-
-                    is ProcessingResult.Success -> when (result.fileType) {
-                        FileType.MENU -> {
-                            val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
-                                listOf(
-                                    InlineKeyboardButton.Url(
-                                        text = Strings.checkMenuBtnText,
-                                        url = menuPageUrl
-                                    )
-                                ),
-                            )
-
-                            bot.sendMessage(
-                                prevMessage = message,
-                                messageText = result.data,
-                                parseMode = MARKDOWN,
-                                replyMarkup = inlineKeyboardMarkup
-                            )
-                        }
-
-                        FileType.TABLE -> {
-                            val inlineKeyboardMarkup = InlineKeyboardMarkup.create(
-                                listOf(
-                                    InlineKeyboardButton.Url(
-                                        text = Strings.checkTableBtnText,
-                                        url = tablePageUrl
-                                    )
-                                ),
-                            )
-
-                            bot.sendMessage(
-                                prevMessage = message,
-                                messageText = result.data,
-                                parseMode = MARKDOWN,
-                                replyMarkup = inlineKeyboardMarkup
-                            )
-                        }
-                    }
-
-                    is ProcessingResult.ErrorWrongDocumentType ->
-                        bot.sendMessage(message, "Неверный формат файла.")
-
-                    is ProcessingResult.Error ->
-                        bot.sendMessage(message, result.message)
-
-                    is ProcessingResult.AlreadyUploaded ->
-                        bot.sendMessage(message, result.message)
-                }
-            }
-        }
-
-        command("status") {
-            if (!hasAccess(message.chat.username)) return@command
-            interactor.getLastAddedMenu { menu ->
-                if (menu == null) {
-                    bot.sendMessage(
-                        message,
-                        "Не удалось получить информацию о последнем файле меню"
-                    )
-                    return@getLastAddedMenu
-                }
-                bot.sendMessage(
-                    message,
-                    "Последний файл меню:\n\n" +
-                            "Имя - ${menu.name ?: "Неизвестно"}\n\n" +
-                            "Дата загрузки - ${menu.lastModificationDate ?: "Неизвестно"}"
-                )
-            }
-            interactor.getLastAddedFoodTable { table ->
-                if (table == null) {
-                    bot.sendMessage(message, "Не удалось получить информацию по последней таблице")
-                    return@getLastAddedFoodTable
-                }
-                bot.sendMessage(
-                    message,
-                    "Последняя таблица:\n\n" +
-                            "Имя - ${table.name}\n\n" +
-                            "Дата загрузки - ${table.lastModificationDate ?: "Неизвестно"}"
-                )
+            docToReplace = document
+            interactor.uploadFile(bot, document) { result ->
+                processUploadingResult(result, bot, message)
             }
         }
 
@@ -276,6 +276,17 @@ fun foodBot(
         }
     }
 }
+
+private fun createCallbackButtons(entries: Map<String, String>) = InlineKeyboardMarkup.create(
+    listOf(
+        entries.map {
+            InlineKeyboardButton.CallbackData(
+                text = it.key,
+                callbackData = it.value
+            )
+        }
+    )
+)
 
 private fun Bot.sendMessage(
     prevMessage: Message,
