@@ -4,7 +4,7 @@ import domain.interactors.WebsiteInteractor
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
-fun main() {
+fun main(args: Array<String>) {
     val credentials = readCredentialsFile()
     val botToken = credentials.token
     val allowedUsers = credentials.allowedUsers
@@ -19,6 +19,7 @@ fun main() {
         credentials.menuPage,
         credentials.tablePage,
         WebsiteInteractor(credentials),
+        fullLog = args.contains("--verbose")
     ).startPolling()
 }
 

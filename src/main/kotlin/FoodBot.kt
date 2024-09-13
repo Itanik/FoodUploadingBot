@@ -38,10 +38,11 @@ fun foodBot(
     menuPageUrl: String,
     tablePageUrl: String,
     interactor: WebsiteInteractor,
+    fullLog: Boolean = false,
 ) = bot {
     token = botToken
     timeout = 30
-    logLevel = LogLevel.Network.Body
+    logLevel = if (fullLog) LogLevel.Network.Body else LogLevel.Network.None
     var deleteScheduled = false
     var docToReplace: Document? = null
 
@@ -302,9 +303,9 @@ private fun Bot.sendMessage(
 ) {
     println(
         "Sending message to user ${prevMessage.chat.username}. " +
-                "Text: $messageText. " +
                 "Parse mode: ${parseMode != null}. " +
-                "Reply markup: ${replyMarkup != null}"
+                "Reply markup: ${replyMarkup != null}. " +
+                "Text: \n\"$messageText\""
     )
     sendMessage(
         chatId = ChatId.fromId(prevMessage.chat.id),
