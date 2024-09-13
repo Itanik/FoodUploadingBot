@@ -94,6 +94,7 @@ fun foodBot(
         }
     }
 
+    // register commands
     dispatch {
         command(Commands.START) {
             if (!allowedUsers.contains(message.chat.username)) {

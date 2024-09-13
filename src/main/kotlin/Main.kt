@@ -19,7 +19,7 @@ fun main() {
         credentials.menuPage,
         credentials.tablePage,
         WebsiteInteractor(credentials),
-    ).run { startPolling() }
+    ).startPolling()
 }
 
 private fun readCredentialsFile(): Credentials {
