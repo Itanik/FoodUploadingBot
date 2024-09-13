@@ -157,22 +157,14 @@ class WebsiteInteractor(credentials: Credentials) {
         throw Exception("Не могу проверить последнее загруженное меню")
     }
 
-    private fun uploadMenu(menuFile: File): UploadingResult {
-        return try {
-            ftpManager.connect()
-
+    private fun uploadMenu(menuFile: File): UploadingResult =
+        ftpManager.commit(onError = { e -> UploadingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE) }) {
             val path = uploadMenuFile(menuFile)
             uploadMenuJson(path, menuFile.name)
             deleteFile(menuFile)
 
             UploadingResult.Success(menuUploadedSuccessfully, FileType.MENU_FILE)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            UploadingResult.Error("Ошибка: ${e.message}", FileType.MENU_FILE)
-        } finally {
-            ftpManager.disconnect()
         }
-    }
 
     private fun uploadMenuFile(menuFile: File): String {
         val fileName = menuFile.name
@@ -180,27 +172,21 @@ class WebsiteInteractor(credentials: Credentials) {
         val newPath = foodPath.plus(newName)
 
         val isFileUploaded = ftpManager.uploadFile(newPath, menuFile.inputStream())
-        if (isFileUploaded)
-            println("Successfully uploaded $newName!")
-        else
-            throw Exception("Не удалось загрузить файл меню")
+        if (isFileUploaded) println("Successfully uploaded $newName!")
+        else throw Exception("Не удалось загрузить файл меню")
         return newPath
     }
 
     private fun uploadMenuJson(path: String, name: String) {
         val format = Json { prettyPrint = true }
         val menu = Menu(
-            path.plus("?").plus(System.currentTimeMillis()),
-            name,
-            getCurrentMoscowTime()
+            path.plus("?").plus(System.currentTimeMillis()), name, getCurrentMoscowTime()
         )
         val json = format.encodeToString(menu)
 
         val isJsonUploaded = ftpManager.uploadFile(foodPath.plus(menuJsonFileName), json.byteInputStream())
-        if (isJsonUploaded)
-            println("Successfully uploaded $menuJsonFileName!")
-        else
-            throw Exception("Не могу обновить метафайл с данными меню")
+        if (isJsonUploaded) println("Successfully uploaded $menuJsonFileName!")
+        else throw Exception("Не могу обновить метафайл с данными меню")
     }
 
     private suspend fun isTableAlreadyUploaded(tableName: String) = try {
@@ -209,58 +195,37 @@ class WebsiteInteractor(credentials: Credentials) {
         throw Exception("Не могу проверить последнюю загруженную таблицу")
     }
 
-    private fun uploadTable(tableFile: File): UploadingResult {
-        return try {
-            ftpManager.connect()
-
-            val isFileUploaded = ftpManager.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream())
-            if (isFileUploaded) {
-                println("Successfully uploaded ${tableFile.name}!")
-                uploadUpdatedFoodFilesJson()
-                deleteFile(tableFile)
-                UploadingResult.Success(tableUploadedSuccessfully, FileType.TABLE_FILE)
-            } else
-                UploadingResult.Error("Не удалось загрузить файл таблицы", FileType.TABLE_FILE)
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            UploadingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE)
-        } finally {
-            ftpManager.disconnect()
-        }
-    }
-
-    fun getLastAddedFile(): Food? {
-        ftpManager.commit {
-            return ftpManager.getLastAddedFile()
-        }
-        return null
-    }
-
-    fun deleteLastFileOnServer(): DeletingResult {
-        return try {
-            ftpManager.connect()
-            val lastAddedFile = ftpManager.getLastAddedFile()
-                ?: return DeletingResult.Error(deleteLastFailed.format(", файл не найден"))
-
-            if (!ftpManager.deleteFile(lastAddedFile.path))
-                DeletingResult.Error(deleteLastFailed.format(""))
-
+    private fun uploadTable(tableFile: File): UploadingResult = ftpManager.commit(
+        onError = { e -> UploadingResult.Error("Ошибка: ${e.message}", FileType.TABLE_FILE) },
+    ) {
+        val isFileUploaded = ftpManager.uploadFile(foodPath.plus(tableFile.name), tableFile.inputStream())
+        if (isFileUploaded) {
+            println("Successfully uploaded ${tableFile.name}!")
             uploadUpdatedFoodFilesJson()
-            DeletingResult.Success(deleteLastSuccess.format(lastAddedFile.name))
-        } catch (e: Exception) {
-            DeletingResult.Error(deleteLastFailed.format(", причина: ${e.message}"))
-        } finally {
-            ftpManager.disconnect()
-        }
+            deleteFile(tableFile)
+            UploadingResult.Success(tableUploadedSuccessfully, FileType.TABLE_FILE)
+        } else UploadingResult.Error("Не удалось загрузить файл таблицы", FileType.TABLE_FILE)
     }
 
-    fun updateJson(): Boolean {
-        ftpManager.commit {
-            uploadUpdatedFoodFilesJson()
-            return true
-        }
-        return false
+    fun getLastAddedFile(): Food? = ftpManager.commit(onError = { _ -> null }) {
+        ftpManager.getLastAddedFile()
+    }
+
+    fun deleteLastFileOnServer(): DeletingResult = ftpManager.commit(
+        onError = { e -> DeletingResult.Error(deleteLastFailed.format(", причина: ${e.message}")) },
+    ) {
+        val lastAddedFile =
+            ftpManager.getLastAddedFile() ?: return DeletingResult.Error(deleteLastFailed.format(", файл не найден"))
+
+        if (!ftpManager.deleteFile(lastAddedFile.path)) DeletingResult.Error(deleteLastFailed.format(""))
+
+        uploadUpdatedFoodFilesJson()
+        DeletingResult.Success(deleteLastSuccess.format(lastAddedFile.name))
+    }
+
+    fun updateJson(): Boolean = ftpManager.commit(onError = { _ -> false }) {
+        uploadUpdatedFoodFilesJson()
+        true
     }
 
     private fun deleteFile(file: File) {
@@ -274,10 +239,8 @@ class WebsiteInteractor(credentials: Credentials) {
         val json = format.encodeToString(foodFiles)
 
         val isJsonUploaded = ftpManager.uploadFile(foodPath.plus(foodJsonFileName), json.byteInputStream())
-        if (isJsonUploaded)
-            println("Successfully uploaded $foodJsonFileName!")
-        else
-            throw Exception("Не могу обновить метафайл с данными таблиц")
+        if (isJsonUploaded) println("Successfully uploaded $foodJsonFileName!")
+        else throw Exception("Не могу обновить метафайл с данными таблиц")
     }
 
     private fun getCurrentMoscowTime() =

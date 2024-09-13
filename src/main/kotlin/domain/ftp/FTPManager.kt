@@ -89,14 +89,13 @@ class FTPManager(private val credentials: Credentials) {
         return file.use { client.storeFile(path, it) }
     }
 
-    inline fun commit(action: ()-> Unit) {
-        try {
-            connect()
-            action()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
-            disconnect()
-        }
+    inline fun <T> commit(onError: (Exception) -> T, action: () -> T): T = try {
+        connect()
+        action()
+    } catch (e: Exception) {
+        e.printStackTrace()
+        onError(e)
+    } finally {
+        disconnect()
     }
 }
